@@ -31,7 +31,7 @@ class BaseClassifier(ClassifierMixin):
         else:
             self.worker_num = int(worker_num)
 
-    def fit(self, X, Y=None, lr=0.01, cv=5, batch_size=32, shuffle=True, epoches=10):
+    def fit(self, X, Y=None, lr=0.01, cv=5, batch_size=32, shuffle=True, epoches=10,early_stop=None):
         """
         训练
         :param X:
@@ -42,7 +42,8 @@ class BaseClassifier(ClassifierMixin):
             X = X.astype(np.float32)
         if Y.dtype != np.int64:
             Y = Y.astype(np.int64)
-
+        if early_stop:
+            self.early_times=0
         if not hasattr(self, 'optimizer'):
             self.optimizer = self.optimizer_func(self.net.parameters(), lr=lr)
 
@@ -106,6 +107,30 @@ class BaseClassifier(ClassifierMixin):
                       ' test loss:{:.4f} test acc:{:.4f}'.format(cv_loop, epoch, *stat_one_loop))
 
                 history.append(stat_one_loop)
+
+                if early_stop:
+                    if isinstance(early_stop,str):
+                        i=['train_loss','train_acc','test_loss','test_acc'].index(early_stop)
+                        if len(history)>2:
+                            if early_stop in {'train_acc','test_acc'} and history[-1][i]<=history[-2][i] and history[-1][i]<=history[-3][i]:
+                                self.early_times+=1
+                            elif history[-1][i]>=history[-2][i] and history[-1][i]>=history[-3][i]:
+                                self.early_times += 1
+                            else:
+                                self.early_times=0
+                    elif str(type(early_stop)) == 'function' and early_stop(*stat_one_loop):
+                        self.early_times += 1
+
+                    elif isinstance(early_stop,int):
+
+                        if len(history)>early_stop and all([history[-1][1]<=history[-2-i][1] for i in range(early_stop)]):
+                            self.early_times += 1
+                        else:
+                            self.early_times=0
+
+                    if self.early_times>2:
+                        return history
+
         return history
 
     def predict(self, X):
@@ -199,7 +224,7 @@ class BaseRegressor(RegressorMixin):
         else:
             self.worker_num = int(worker_num)
 
-    def fit(self, X, Y=None, lr=0.01, cv=5, batch_size=32, shuffle=True, epoches=10):
+    def fit(self, X, Y=None, lr=0.01, cv=5, batch_size=32, shuffle=True, epoches=10,early_stop=None):
         """
         训练
         :param X:
@@ -210,7 +235,8 @@ class BaseRegressor(RegressorMixin):
             X = X.astype(np.float32)
         if Y.dtype != np.float32:
             Y = Y.astype(np.float32)
-
+        if early_stop:
+            self.early_times=0
         if not hasattr(self, 'optimizer'):
             self.optimizer = self.optimizer_func(self.net.parameters(), lr=lr)
 
@@ -265,6 +291,25 @@ class BaseRegressor(RegressorMixin):
                       'test loss:{:.4f}'.format(cv_loop, epoch, *stat_one_loop))
 
                 history.append(stat_one_loop)
+                if str(type(early_stop))=='function' and early_stop(*stat_one_loop):
+                    self.early_times += 1
+                elif isinstance(early_stop, str):
+                    i = ['train_loss', 'test_loss'].index(early_stop)
+                    if len(history) > 2:
+                        if history[-1][i] >= history[-2][i] and history[-1][i] >= history[-3][i]:
+                            self.early_times += 1
+                        else:
+                            self.early_times=0
+                elif isinstance(early_stop, int) and len(history)>early_stop:
+                    if all([history[-1][0] >= history[-2 - i][0] for i in range(early_stop)]):
+                        self.early_times += 1
+                    else:
+                        self.early_times=0
+                else:
+                    self.early_times=0
+
+                if self.early_times>2:
+                    return history
         return history
 
     def predict(self, X):

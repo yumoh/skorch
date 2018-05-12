@@ -25,7 +25,7 @@ net=nn.Sequential(
 )
 
 sknet=Regressor(net,loss_func=F.l1_loss)
-sknet.fit(X_train,y_train,epoches=5)
+sknet.fit(X_train,y_train,epoches=5,early_stop=2)
 sknet.save_weight('housing.regressor.pkl')
 s=sknet.score(X_test,y_test)
 print(s)
